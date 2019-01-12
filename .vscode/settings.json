@@ -1,0 +1,6 @@
+{
+    "java.configuration.updateBuildConfiguration": "interactive",
+    "editor.tabSize": 2,
+    "editor.renderWhitespace": "boundary",
+    "editor.detectIndentation": false
+}

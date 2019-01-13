@@ -24,8 +24,10 @@ public class FormulaTest {
 
   @Test public void varIsAtomic() {
     String data = "data";
+    Var<String> v = var(data);
 
-    assertTrue(var(data).match(
+    assertThat(v.var(), sameInstance(v));
+    assertTrue(v.match(
       var -> { return var.data().equals(data); },
       not -> { return false; }
     ));

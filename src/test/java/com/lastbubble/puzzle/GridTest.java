@@ -43,4 +43,16 @@ public class GridTest {
     assertThat(grid.valueAt(1, 0), OptionalMatchers.contains("def"));
     assertThat(grid.valueAt(1, 1), OptionalMatchers.empty());
   }
+
+  @Test public void valueAt_usingPos() {
+    grid = builder
+      .add(Cell.at(0, 1).withValue("abc"))
+      .add(Cell.at(1, 0).withValue("def"))
+      .build();
+
+    assertThat(grid.valueAt(0, 0), is(grid.valueAt(Pos.at(0, 0))));
+    assertThat(grid.valueAt(1, 0), is(grid.valueAt(Pos.at(1, 0))));
+    assertThat(grid.valueAt(0, 1), is(grid.valueAt(Pos.at(0, 1))));
+    assertThat(grid.valueAt(1, 1), is(grid.valueAt(Pos.at(1, 1))));
+  }
 }

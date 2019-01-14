@@ -26,7 +26,10 @@ test {
 jacocoTestReport {
   afterEvaluate {
     classDirectories = files(classDirectories.files.collect {
-      fileTree(dir: it, exclude: 'com/lastbubble/puzzle/Main*')
+      fileTree(dir: it, exclude: [
+        'com/lastbubble/puzzle/Main*',
+        'com/lastbubble/puzzle/issue/*'
+      ])
     })
   }
 }

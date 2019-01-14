@@ -66,6 +66,8 @@ public class CNFTest {
     assertThatConvert(implies(a, b), "-a b");
     assertThatConvert(implies(a, allOf(b, c, d)), "-a b", "-a c", "-a d");
     assertThatConvert(implies(a, allOf(not(b), not(c), not(d))), "-a -b", "-a -c", "-a -d");
+    assertThatConvert(implies(a, anyOf(b, c, d)), "-a b c d");
+    assertThatConvert(implies(a, not(anyOf(b, c, d))), "-a -b", "-a -c", "-a -d");
   }
 
   private static void assertThatFormula(Function<Formula, Formula> f, Formula formula, String s) {

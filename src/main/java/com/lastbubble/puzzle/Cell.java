@@ -1,5 +1,6 @@
 package com.lastbubble.puzzle;
 
+import java.util.Objects;
 import java.util.Optional;
 
 public class Cell<V> {
@@ -20,4 +21,22 @@ public class Cell<V> {
   public Optional<V> value() { return value; }
 
   public <D> Cell<D> withValue(D value) { return new Cell<D>(pos(), value); }
+
+  @Override public int hashCode() { return Objects.hash(pos(), value()); }
+
+  @Override public boolean equals(Object obj) {
+    if (obj == this) { return true; }
+
+    if (obj instanceof Cell<?>) {
+      Cell<?> that = (Cell<?>) obj;
+
+      return (this.pos.equals(that.pos) && this.value.equals(that.value));
+    }
+
+    return false;
+  }
+
+  @Override public String toString() {
+    return String.format("%s%s", pos, value.map(x -> "=" + x).orElse(""));
+  }
 }

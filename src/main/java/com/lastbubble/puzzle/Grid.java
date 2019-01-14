@@ -15,11 +15,13 @@ public class Grid<V> {
 
   public int height() { return values.length > 0 ? values[0].length : 0; }
 
+  public Optional<V> valueAt(Pos pos) { return valueAt(pos.x(), pos.y()); }
+
   public Optional<V> valueAt(int x, int y) { return Optional.ofNullable(values[x][y]); }
 
   public static <V> Builder<V> builder(Class<V> valueClass) { return new Builder<V>(valueClass); }
 
-  static class Builder<V> {
+  public static class Builder<V> {
 
     private final Class<V> valueClass;
     private final List<Cell<V>> cells = new ArrayList<>();

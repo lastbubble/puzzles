@@ -90,11 +90,7 @@ public class CNF {
       },
       null, // implies
       null, // allOf
-      anyOf -> {
-        List<AtomicFormula<?>> c = anyOf.targets().filter(x -> x instanceof AtomicFormula).map(x -> (AtomicFormula<?>) x).collect(toList());
-        anyOf.targets().filter(x -> x instanceof AnyOf).forEach(y -> c.addAll(toClause(y)));
-        return c;
-      }
+      anyOf -> anyOf.targets().map(CNF::toClause).flatMap(List::stream).collect(toList())
     );
   }
 }

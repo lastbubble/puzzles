@@ -4,6 +4,8 @@ import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 public class Grid<V> {
 
@@ -15,9 +17,39 @@ public class Grid<V> {
 
   public int height() { return values.length > 0 ? values[0].length : 0; }
 
+  public Stream<Pos> positions() {
+    int width = width();
+    return IntStream.range(0, width * height()).mapToObj(n -> {
+      int row = n / width;
+      return Pos.at(n - (width * row), row);
+    });
+  }
+
+  public Stream<Pos> neighborsOf(Pos pos) {
+    int x = pos.x(), y = pos.y();
+    return Stream.of(
+        validPos(x - 1, y - 1),
+        validPos(    x, y - 1),
+        validPos(x + 1, y - 1),
+        validPos(x + 1,     y),
+        validPos(x + 1, y + 1),
+        validPos(    x, y + 1),
+        validPos(x - 1, y + 1),
+        validPos(x - 1,     y)
+      ).filter(Optional::isPresent).map(Optional::get);
+  }
+
+  private Optional<Pos> validPos(int x, int y) {
+    return (x >= 0 && x < width() && y >= 0 && y < height()) ? Optional.of(Pos.at(x, y)) : Optional.<Pos>empty();
+  }
+
   public Optional<V> valueAt(Pos pos) { return valueAt(pos.x(), pos.y()); }
 
   public Optional<V> valueAt(int x, int y) { return Optional.ofNullable(values[x][y]); }
+
+  public Stream<Cell<V>> filledCells() {
+    return positions().filter(p -> values[p.x()][p.y()] != null).map(p -> Cell.at(p).withValue(values[p.x()][p.y()]));
+  }
 
   public static <V> Builder<V> builder(Class<V> valueClass) { return new Builder<V>(valueClass); }
 

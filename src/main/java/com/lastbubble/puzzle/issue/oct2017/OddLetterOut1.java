@@ -37,21 +37,21 @@ public class OddLetterOut1 extends OddLetterOut {
     adjacentLetters.put('W', Arrays.asList('L'));
 
     Stream.of('B', 'C', 'O', 'T', 'V', 'Z').forEach(c ->
-      solver.addExactly(1, posStream().map(p -> cell(p, c)).map(solver::varFor))
+      solver.addExactly(1, blankGrid.positions().map(p -> cell(p, c)).map(solver::varFor))
     );
 
-    alphabetStream().forEach(
+    allValues().forEach(
       c -> {
-        solver.addAtMost(1, posStream().map(p -> cell(p, c)).map(solver::varFor));
+        solver.addAtMost(1, blankGrid.positions().map(p -> cell(p, c)).map(solver::varFor));
 
         List<Character> adjacent = adjacentLetters.get(c);
         if (adjacent != null) {
           adjacent.stream().forEach(a ->
-            posStream().forEach(p ->
+            blankGrid.positions().forEach(p ->
               solver.add(
                 implies(
                   solver.varFor(cell(p, c)),
-                  anyOf(neighborsOf(p).map(n -> cell(n, a)).map(solver::varFor))
+                  anyOf(blankGrid.neighborsOf(p).map(n -> cell(n, a)).map(solver::varFor))
                 )
               )
             )
@@ -60,8 +60,8 @@ public class OddLetterOut1 extends OddLetterOut {
       }
     );
 
-    posStream().forEach(p ->
-      solver.addExactly(1, alphabetStream().map(c -> cell(p, c)).map(solver::varFor))
+    blankGrid.positions().forEach(p ->
+      solver.addExactly(1, allValues().map(c -> cell(p, c)).map(solver::varFor))
     );
 
     solver.addExactly(1, Stream.of(cell(0, 0, 'M'), cell(1, 0, 'M'), cell(2, 0, 'M')).map(solver::varFor));
@@ -92,7 +92,7 @@ public class OddLetterOut1 extends OddLetterOut {
 
     solver.add(solver.varFor(cell(0, 3, 'J')));
 
-    posStream().filter(p -> p.y() < 4).forEach(p ->
+    blankGrid.positions().filter(p -> p.y() < 4).forEach(p ->
       solver.add(implies(
           solver.varFor(cell(p, 'B')),
           solver.varFor(cell(p.x(), p.y() + 1, 'Q'))
@@ -100,7 +100,7 @@ public class OddLetterOut1 extends OddLetterOut {
       )
     );
 
-    posStream().forEach(p -> {
+    blankGrid.positions().forEach(p -> {
       solver.add(implies(
           solver.varFor(cell(p, 'X')),
           anyOf(IntStream.range(0, 5).mapToObj(n -> cell(n, p.y(), 'F')).map(solver::varFor))

@@ -13,30 +13,30 @@ public class OddLetterOut3 extends OddLetterOut {
   @Override protected void addConstraints() {
 
     Stream.of('A', 'B', 'C', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z').forEach(c ->
-      solver.addExactly(1, posStream().map(p -> cell(p, c)).map(solver::varFor))
+      solver.addExactly(1, blankGrid.positions().map(p -> cell(p, c)).map(solver::varFor))
     );
 
-    alphabetStream().forEach(
+    allValues().forEach(
       c -> {
-        solver.addAtMost(1, posStream().map(p -> cell(p, c)).map(solver::varFor));
+        solver.addAtMost(1, blankGrid.positions().map(p -> cell(p, c)).map(solver::varFor));
 
         if (c != 'Z') {
-          posStream().forEach(p ->
+          blankGrid.positions().forEach(p ->
             solver.add(
               implies(
                 solver.varFor(cell(p, c)),
-                not(anyOf(neighborsOf(p).map(n -> cell(n, (char) (c + 1))).map(solver::varFor)))
+                not(anyOf(blankGrid.neighborsOf(p).map(n -> cell(n, (char) (c + 1))).map(solver::varFor)))
               )
             )
           );
         }
 
         if (c != 'A') {
-          posStream().forEach(p ->
+          blankGrid.positions().forEach(p ->
             solver.add(
               implies(
                 solver.varFor(cell(p, c)),
-                not(anyOf(neighborsOf(p).map(n -> cell(n, (char) (c - 1))).map(solver::varFor)))
+                not(anyOf(blankGrid.neighborsOf(p).map(n -> cell(n, (char) (c - 1))).map(solver::varFor)))
               )
             )
           );
@@ -44,13 +44,13 @@ public class OddLetterOut3 extends OddLetterOut {
       }
     );
 
-    posStream().forEach(p ->
-      solver.addExactly(1, alphabetStream().map(c -> cell(p, c)).map(solver::varFor))
+    blankGrid.positions().forEach(p ->
+      solver.addExactly(1, allValues().map(c -> cell(p, c)).map(solver::varFor))
     );
 
     solver.add(solver.varFor(cell(1, 4, 'V')));
 
-    posStream().forEach(p ->
+    blankGrid.positions().forEach(p ->
       solver.add(implies(
           solver.varFor(cell(p, 'G')),
           allOf(
@@ -71,7 +71,7 @@ public class OddLetterOut3 extends OddLetterOut {
       )
     );
 
-    posStream().forEach(p ->
+    blankGrid.positions().forEach(p ->
       solver.add(implies(
           solver.varFor(cell(p, 'M')),
           allOf(
@@ -89,7 +89,7 @@ public class OddLetterOut3 extends OddLetterOut {
       )
     );
 
-    posStream().forEach(p ->
+    blankGrid.positions().forEach(p ->
       solver.add(implies(
           solver.varFor(cell(p, 'T')),
           allOf(
@@ -107,7 +107,7 @@ public class OddLetterOut3 extends OddLetterOut {
       )
     );
 
-    posStream().forEach(p ->
+    blankGrid.positions().forEach(p ->
       solver.add(implies(
           solver.varFor(cell(p, 'C')),
           allOf(
@@ -125,7 +125,7 @@ public class OddLetterOut3 extends OddLetterOut {
       )
     );
 
-    posStream().forEach(p ->
+    blankGrid.positions().forEach(p ->
       solver.add(implies(
           solver.varFor(cell(p, 'F')),
           allOf(
@@ -143,7 +143,7 @@ public class OddLetterOut3 extends OddLetterOut {
       )
     );
 
-    posStream().forEach(p ->
+    blankGrid.positions().forEach(p ->
       solver.add(implies(
           solver.varFor(cell(p, 'J')),
           allOf(
@@ -161,14 +161,14 @@ public class OddLetterOut3 extends OddLetterOut {
       )
     );
 
-    posStream().forEach(p ->
+    blankGrid.positions().forEach(p ->
       solver.add(implies(
           solver.varFor(cell(p, 'Z')),
           not(anyOf(IntStream.range(0, 5).mapToObj(y -> cell(p.x(), y, 'F')).map(solver::varFor)))
         )
       )
     );
-    posStream().forEach(p ->
+    blankGrid.positions().forEach(p ->
       solver.add(implies(
           solver.varFor(cell(p, 'Z')),
           not(anyOf(IntStream.range(0, 5).mapToObj(x -> cell(x, p.y(), 'F')).map(solver::varFor)))
@@ -178,7 +178,7 @@ public class OddLetterOut3 extends OddLetterOut {
 
     Stream.of('P', 'E', 'A', 'N', 'U', 'T', 'S').forEach(c ->
       solver.addExactly(1,
-        posStream()
+        blankGrid.positions()
           .filter(p -> p.x() == 0 || p.x() == 4 || p.y() == 0 || p.y() == 4)
           .map(p -> cell(p, c))
           .map(solver::varFor)

@@ -1,7 +1,11 @@
 package com.lastbubble.puzzle;
 
 import java.io.PrintWriter;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.function.Function;
+
+import javax.swing.border.Border;
 
 public class GridPrinter<V> {
 
@@ -14,41 +18,55 @@ public class GridPrinter<V> {
 
     char[] row = new char[width];
 
+    BorderBuilder border = new BorderBuilder();
+
     for (int y = 0; y < height; y++) {
+
+      boolean isTop = (y == 0);
+      boolean isBottom = (y == height - 1);
 
       for (int j = 0; j < row.length; j++) { row[j] = ' '; }
 
       for (int x = 0; x < width; x++) {
 
+        boolean isLeft = (x == 0);
+        boolean isRight = (x == width - 1);
+
         if (y % 2 == 0) {
 
           if (x % 2 == 0) {
 
-            if (y == 0) {
+            if (isTop) {  // top border
 
-              row[x] =
-                (x == 0) ? SINGLE_DOWN_RIGHT : ((x == (width - 1)) ? SINGLE_DOWN_LEFT : SINGLE_DOWN_HORIZONTAL);
+              border.reset().bottom((isLeft || isRight) ? Line.HEAVY : Line.LIGHT);
 
-            } else if (y == (height - 1)) {
+            } else if (isBottom) {  // bottom border
 
-              row[x] =
-                (x == 0) ? SINGLE_UP_RIGHT : ((x == (width - 1)) ? SINGLE_UP_LEFT : SINGLE_UP_HORIZONTAL);
+              border.reset().top((isLeft || isRight) ? Line.HEAVY : Line.LIGHT);
 
             } else {
 
-              row[x] =
-                (x == 0) ? SINGLE_VERTICAL_RIGHT : ((x == (width - 1)) ? SINGLE_VERTICAL_LEFT : SINGLE_VERTICAL_HORIZONTAL);
+              border.reset().vertical((isLeft || isRight) ? Line.HEAVY : Line.LIGHT);
             }
 
-          } else {
+            Line horizontalLine = (isTop || isBottom) ? Line.HEAVY : Line.LIGHT;
+            border.left(!isLeft ? horizontalLine : Line.NONE);
+            border.right(!isRight ? horizontalLine : Line.NONE);
 
-            row[x] = SINGLE_HORIZONTAL;
+            row[x] = border.build();
+
+          } else {   // horizontal border between vertically adjacent cells
+
+            row[x] = border.reset().horizontal((isTop || isBottom) ? Line.HEAVY : Line.LIGHT).build();
           }
 
-        } else {
+        } else if (x % 2 == 0) {  // vertical border between horizontally adjacent cells
 
-          if (x % 2 == 0) { row[x] = SINGLE_VERTICAL; }
-          else { row[x] = grid.valueAt((x - 1) / 2, (y - 1) / 2).map(valueAsChar).orElse(' '); }
+          row[x] = border.reset().vertical((isLeft || isRight) ? Line.HEAVY : Line.LIGHT).build();
+        
+        } else {  // cell value
+
+          row[x] = grid.valueAt((x - 1) / 2, (y - 1) / 2).map(valueAsChar).orElse(' ');
         }
       }
 
@@ -56,15 +74,105 @@ public class GridPrinter<V> {
     }
   }
 
-  private static final char SINGLE_HORIZONTAL = '\u2500';
-  private static final char SINGLE_VERTICAL = '\u2502';
-  private static final char SINGLE_DOWN_RIGHT = '\u250C';
-  private static final char SINGLE_DOWN_LEFT = '\u2510';
-  private static final char SINGLE_UP_RIGHT = '\u2514';
-  private static final char SINGLE_UP_LEFT = '\u2518';
-  private static final char SINGLE_VERTICAL_RIGHT = '\u251c';
-  private static final char SINGLE_VERTICAL_LEFT = '\u2524';
-  private static final char SINGLE_DOWN_HORIZONTAL = '\u252c';
-  private static final char SINGLE_UP_HORIZONTAL = '\u2534';
-  private static final char SINGLE_VERTICAL_HORIZONTAL = '\u253c';
+  public enum Line { LIGHT, HEAVY, NONE; }
+
+  public static class BorderBuilder {
+    private Line top, left, bottom, right;
+
+    public BorderBuilder() { reset(); }
+
+    public BorderBuilder reset() {
+      return top(Line.NONE).left(Line.NONE).bottom(Line.NONE).right(Line.NONE);
+    }
+
+    public BorderBuilder top(Line l) { top = l; return this; }
+    public BorderBuilder bottom(Line l) { bottom = l; return this; }
+    public BorderBuilder left(Line l) { left = l; return this; }
+    public BorderBuilder right(Line l) { right = l; return this; }
+    public BorderBuilder horizontal(Line l) { return left(l).right(l); }
+    public BorderBuilder vertical(Line l) { return top(l).bottom(l); }
+
+    public char build() {
+      String key = String.format("%c%c%c%c",
+        top.name().charAt(0),
+        left.name().charAt(0),
+        bottom.name().charAt(0),
+        right.name().charAt(0)
+      );
+      return borderChars.getOrDefault(key, ' ');
+    }
+  }
+
+  private static final Map<String, Character> borderChars = new HashMap<>();
+
+  static {
+    borderChars.put("NLNL", '\u2500'); // light horizontal
+    borderChars.put("NHNH", '\u2501'); // heavy horizontal
+    borderChars.put("LNLN", '\u2502'); // light vertical
+    borderChars.put("HNHN", '\u2503'); // heavy vertical
+    borderChars.put("NNLL", '\u250C'); // light down and right
+    borderChars.put("NNLH", '\u250D'); // down light and right heavy
+    borderChars.put("NNHL", '\u250E'); // down heavy and right light
+    borderChars.put("NNHH", '\u250F'); // down heavy and right heavy
+    borderChars.put("NLLN", '\u2510'); // light down and left
+    borderChars.put("NHLN", '\u2511'); // down light and left heavy
+    borderChars.put("NLHN", '\u2512'); // down heavy and left light
+    borderChars.put("NHHN", '\u2513'); // down heavy and left heavy
+    borderChars.put("LNNL", '\u2514'); // light up and right
+    borderChars.put("LNNH", '\u2515'); // up light and right heavy
+    borderChars.put("HNNL", '\u2516'); // up heavy and right light
+    borderChars.put("HNNH", '\u2517'); // up heavy and right heavy
+    borderChars.put("LLNN", '\u2518'); // light up and left
+    borderChars.put("LHNN", '\u2519'); // up light and left heavy
+    borderChars.put("HLNN", '\u251A'); // up heavy and left light
+    borderChars.put("HHNN", '\u251B'); // up heavy and left heavy
+    borderChars.put("LNLL", '\u251C'); // light vertical and right
+    borderChars.put("LNLH", '\u251D'); // vertical right and right heavy
+    borderChars.put("HNLL", '\u251E'); // up heavy and right down light
+    borderChars.put("LNHL", '\u251F'); // down heavy and right up light
+    borderChars.put("HNHL", '\u2520'); // vertical heavy and right light
+    borderChars.put("HNLH", '\u2521'); // down light and right up heavy
+    borderChars.put("LNHH", '\u2522'); // up light and right down heavy
+    borderChars.put("HNHH", '\u2523'); // heavy vertical and right
+    borderChars.put("LLLN", '\u2524'); // light vertical and left
+    borderChars.put("LHLN", '\u2525'); // vertical light and left heavy
+    borderChars.put("HLLN", '\u2526'); // up heavy and left down light
+    borderChars.put("LLHN", '\u2527'); // down heavy and left up light
+    borderChars.put("HLHN", '\u2528'); // vertical heavy and left light
+    borderChars.put("HHLN", '\u2529'); // down light and left up heavy
+    borderChars.put("LHHN", '\u252A'); // up light and left down heavy
+    borderChars.put("HHHN", '\u252B'); // heavy vertical and left
+    borderChars.put("NLLL", '\u252C'); // light down and horizontal
+    borderChars.put("NHLL", '\u252D'); // left heavy and right down light
+    borderChars.put("NLLH", '\u252E'); // right heavy and left down light
+    borderChars.put("NHLH", '\u252F'); // down light and horizontal heavy
+    borderChars.put("NLHL", '\u2530'); // down heavy and horizontal light
+    borderChars.put("NHHL", '\u2531'); // right light and left down heavy
+    borderChars.put("NLHH", '\u2532'); // left light and right down heavy
+    borderChars.put("NHHH", '\u2533'); // heavy down and horizontal
+    borderChars.put("LLNL", '\u2534'); // light up and horizontal
+    borderChars.put("LHNL", '\u2535'); // left heavy and right up light
+    borderChars.put("LLNH", '\u2536'); // right heavy and left up light
+    borderChars.put("LHNH", '\u2537'); // up light and horizontal heavy
+    borderChars.put("HLNL", '\u2538'); // up heavy and horizontal light
+    borderChars.put("HHNL", '\u2539'); // right light and left up heavy
+    borderChars.put("HLNH", '\u253A'); // left light and right up heavy
+    borderChars.put("HHNH", '\u253B'); // heavy up and horizontal
+    borderChars.put("LLLL", '\u253C'); // light vertical and horizontal
+    borderChars.put("LHLL", '\u253D'); // left heavy and right vertical light
+    borderChars.put("LLLH", '\u253E'); // right heavy and left vertical light
+    borderChars.put("LHLH", '\u253F'); // vertical light and horizontal heavy
+    borderChars.put("HLLL", '\u2540'); // up heavy and down horizontal light
+    borderChars.put("LHLL", '\u2541'); // down heavy and up horizontal light
+    borderChars.put("HLHL", '\u2542'); // vertical heavy and horizontal light
+    borderChars.put("HHLL", '\u2543'); // left up heavy and right down light
+    borderChars.put("HLLH", '\u2544'); // right up heavy and left down light
+    borderChars.put("LHHL", '\u2545'); // left down heavy and right up light
+    borderChars.put("LLHH", '\u2546'); // right down heavy and left up light
+    borderChars.put("HHLH", '\u2547'); // down light and up horizontal heavy
+    borderChars.put("LHHH", '\u2548'); // up light and down horizontal heavy
+    borderChars.put("HHHL", '\u2549'); // right light and left vertical heavy
+    borderChars.put("HLHH", '\u254A'); // left light and right vertical heavy
+    borderChars.put("HHHH", '\u254B'); // heavy vertical and horizontal
+  }
 }

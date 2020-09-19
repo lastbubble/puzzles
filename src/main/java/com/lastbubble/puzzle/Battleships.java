@@ -4,10 +4,6 @@ import static com.lastbubble.puzzle.logic.Formula.*;
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toSet;
 
-import com.lastbubble.puzzle.Cell;
-import com.lastbubble.puzzle.Grid;
-import com.lastbubble.puzzle.GridPrinter;
-import com.lastbubble.puzzle.Pos;
 import com.lastbubble.puzzle.solver.Solver;
 
 import java.io.PrintWriter;

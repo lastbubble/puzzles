@@ -39,7 +39,7 @@ public class Grid<V> {
       ).filter(Optional::isPresent).map(Optional::get);
   }
 
-  private Optional<Pos> validPos(int x, int y) {
+  public Optional<Pos> validPos(int x, int y) {
     return (x >= 0 && x < width() && y >= 0 && y < height()) ? Optional.of(Pos.at(x, y)) : Optional.<Pos>empty();
   }
 

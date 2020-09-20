@@ -3,9 +3,10 @@ package com.lastbubble.puzzle;
 import java.io.PrintWriter;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
+import java.util.function.BiFunction;
+import java.util.function.BiPredicate;
 import java.util.function.Function;
-
-import javax.swing.border.Border;
 
 public class GridPrinter<V> {
 
@@ -14,83 +15,41 @@ public class GridPrinter<V> {
   public GridPrinter(Function<V, Character> valueAsChar) { this.valueAsChar = valueAsChar; }
 
   public void printTo(PrintWriter writer, Grid<V> grid) {
+    printTo(writer, grid, (a, b) -> true);
+  }
+
+  public void printTo(PrintWriter writer, Grid<V> grid, BiPredicate<Pos, Pos> sameRegion) {
     int width = 2 * grid.width() + 1, height = 2 * grid.height() + 1;
 
     char[] row = new char[width];
 
-    BorderBuilder border = new BorderBuilder();
+    BiFunction<Integer, Integer, Character> charAt = new CharAt(grid, sameRegion);
 
     for (int y = 0; y < height; y++) {
-
-      boolean isTop = (y == 0);
-      boolean isBottom = (y == height - 1);
-
-      for (int j = 0; j < row.length; j++) { row[j] = ' '; }
-
       for (int x = 0; x < width; x++) {
-
-        boolean isLeft = (x == 0);
-        boolean isRight = (x == width - 1);
-
-        if (y % 2 == 0) {
-
-          if (x % 2 == 0) {
-
-            if (isTop) {  // top border
-
-              border.reset().bottom((isLeft || isRight) ? Line.HEAVY : Line.LIGHT);
-
-            } else if (isBottom) {  // bottom border
-
-              border.reset().top((isLeft || isRight) ? Line.HEAVY : Line.LIGHT);
-
-            } else {
-
-              border.reset().vertical((isLeft || isRight) ? Line.HEAVY : Line.LIGHT);
-            }
-
-            Line horizontalLine = (isTop || isBottom) ? Line.HEAVY : Line.LIGHT;
-            border.left(!isLeft ? horizontalLine : Line.NONE);
-            border.right(!isRight ? horizontalLine : Line.NONE);
-
-            row[x] = border.build();
-
-          } else {   // horizontal border between vertically adjacent cells
-
-            row[x] = border.reset().horizontal((isTop || isBottom) ? Line.HEAVY : Line.LIGHT).build();
-          }
-
-        } else if (x % 2 == 0) {  // vertical border between horizontally adjacent cells
-
-          row[x] = border.reset().vertical((isLeft || isRight) ? Line.HEAVY : Line.LIGHT).build();
-        
-        } else {  // cell value
-
-          row[x] = grid.valueAt((x - 1) / 2, (y - 1) / 2).map(valueAsChar).orElse(' ');
-        }
+        row[x] = charAt.apply(x, y);
       }
-
       writer.println( new String(row));
     }
   }
 
-  public enum Line { LIGHT, HEAVY, NONE; }
+  public enum Weight { LIGHT, HEAVY, NONE; }
 
   public static class BorderBuilder {
-    private Line top, left, bottom, right;
+    private Weight top, left, bottom, right;
 
     public BorderBuilder() { reset(); }
 
     public BorderBuilder reset() {
-      return top(Line.NONE).left(Line.NONE).bottom(Line.NONE).right(Line.NONE);
+      return top(Weight.NONE).left(Weight.NONE).bottom(Weight.NONE).right(Weight.NONE);
     }
 
-    public BorderBuilder top(Line l) { top = l; return this; }
-    public BorderBuilder bottom(Line l) { bottom = l; return this; }
-    public BorderBuilder left(Line l) { left = l; return this; }
-    public BorderBuilder right(Line l) { right = l; return this; }
-    public BorderBuilder horizontal(Line l) { return left(l).right(l); }
-    public BorderBuilder vertical(Line l) { return top(l).bottom(l); }
+    public BorderBuilder top(Weight w) { top = w; return this; }
+    public BorderBuilder bottom(Weight w) { bottom = w; return this; }
+    public BorderBuilder left(Weight w) { left = w; return this; }
+    public BorderBuilder right(Weight w) { right = w; return this; }
+    public BorderBuilder horizontal(Weight w) { return left(w).right(w); }
+    public BorderBuilder vertical(Weight w) { return top(w).bottom(w); }
 
     public char build() {
       String key = String.format("%c%c%c%c",
@@ -174,5 +133,71 @@ public class GridPrinter<V> {
     borderChars.put("HHHL", '\u2549'); // right light and left vertical heavy
     borderChars.put("HLHH", '\u254A'); // left light and right vertical heavy
     borderChars.put("HHHH", '\u254B'); // heavy vertical and horizontal
+  }
+
+  private class CharAt implements BiFunction<Integer, Integer, Character> {
+
+    private final Grid<V> grid;
+    private final BiPredicate<Pos, Pos> sameRegion;
+
+    private final BorderBuilder border = new BorderBuilder();
+
+    private CharAt(Grid<V> grid, BiPredicate<Pos, Pos> sameRegion) {
+      this.grid = grid;
+      this.sameRegion = sameRegion;
+    }
+
+    @Override public Character apply(Integer x, Integer y) {
+      int gridX = x / 2;
+      int gridY = y / 2;
+      border.reset();
+      if (y % 2 == 0) {
+        if (x % 2 == 0) {
+          return borderFor(gridX, gridY);
+        } else {
+          Optional<Pos> top = pos(gridX, gridY - 1);
+          Optional<Pos> bottom = pos(gridX, gridY);
+          return border.horizontal(weightFor(top, bottom)).build();
+        }
+      } else {
+        if (x % 2 == 0) {
+          Optional<Pos> left = pos(gridX - 1, gridY);
+          Optional<Pos> right = pos(gridX, gridY);
+          return border.vertical(weightFor(left, right)).build();
+        } else {
+          return grid.valueAt(gridX, gridY).map(valueAsChar).orElse(' ');
+        }
+      }
+    }
+
+    private char borderFor(int x, int y) {
+      Optional<Pos> topLeft = pos(x - 1, y - 1);
+      Optional<Pos> bottomLeft = pos(x - 1, y);
+      Optional<Pos> topRight = pos(x, y - 1);
+      Optional<Pos> bottomRight = pos(x, y);
+
+      return border
+        .top(weightFor(topLeft, topRight))
+        .left(weightFor(topLeft, bottomLeft))
+        .bottom(weightFor(bottomLeft, bottomRight))
+        .right(weightFor(topRight, bottomRight))
+        .build();
+    }
+
+    private Weight weightFor(Optional<Pos> a, Optional<Pos> b) {
+      if (a.isPresent()) {
+        if (b.isPresent()) {
+          return sameRegion.test(a.get(), b.get()) ? Weight.LIGHT : Weight.HEAVY;
+        } else {
+          return Weight.HEAVY;
+        }
+      } else if (b.isPresent()) {
+        return Weight.HEAVY;
+      } else {
+        return Weight.NONE;
+      }
+    }
+
+    private Optional<Pos> pos(int x, int y) { return grid.validPos(x, y); }
   }
 }

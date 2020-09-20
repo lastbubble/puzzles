@@ -11,8 +11,11 @@ import java.util.function.Function;
 public class GridPrinter<V> {
 
   private final Function<V, Character> valueAsChar;
+  private Weight intraRegionBorderWeight = Weight.LIGHT;
 
   public GridPrinter(Function<V, Character> valueAsChar) { this.valueAsChar = valueAsChar; }
+
+  public void suppressIntraRegionBorders() { intraRegionBorderWeight = Weight.NONE; }
 
   public void printTo(PrintWriter writer, Grid<V> grid) {
     printTo(writer, grid, (a, b) -> true);
@@ -187,7 +190,7 @@ public class GridPrinter<V> {
     private Weight weightFor(Optional<Pos> a, Optional<Pos> b) {
       if (a.isPresent()) {
         if (b.isPresent()) {
-          return sameRegion.test(a.get(), b.get()) ? Weight.LIGHT : Weight.HEAVY;
+          return sameRegion.test(a.get(), b.get()) ? intraRegionBorderWeight : Weight.HEAVY;
         } else {
           return Weight.HEAVY;
         }

@@ -1,22 +1,44 @@
 package com.lastbubble.puzzle;
 
+import java.io.PrintStream;
+import java.lang.reflect.Method;
+import java.net.URL;
+import static java.nio.charset.StandardCharsets.UTF_8;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+
 public class Main {
 
-  public static void main(String[] args) throws Exception {
-    ((Runnable) Class.forName(classNameFor(args)).getConstructor().newInstance()).run();
+  private static void usage(PrintStream out) {
+    out.println("Usage:");
+    out.println("  Main <solverClassName>");
+    out.println("    or");
+    out.println("  Main <solverClassName> <puzzleResourcePath>");
   }
 
-  private static String classNameFor(String[] args) {
-
-    if (args.length == 2) {
-
-      return String.format("com.lastbubble.puzzle.issue.%s.%s", args[0], args[1]);
-
-    } else if (args.length == 1) {
-
-      return String.format("com.lastbubble.puzzle.%s", args[0]);
+  public static void main(String[] args) throws Exception {
+    if (args.length == 0) {
+      usage(System.out);
+      System.exit(1);
     }
 
-    throw new IllegalArgumentException("Must supply one or two arguments");
+    Class<?> solverClass = Class.forName(String.format("com.lastbubble.puzzle.%s", args[0]));
+
+    if (args.length == 1) {
+      ((Runnable) solverClass.getConstructor().newInstance()).run();
+
+    } else {
+      URL puzzleResource = solverClass.getResource(args[1]);
+      if (puzzleResource == null) {
+        System.err.format("Puzzle %s not found for solver %s%n", args[1], solverClass);
+        System.exit(1);
+      }
+
+      Iterable<String> puzzleLines = Files.readAllLines(Paths.get(puzzleResource.toURI()), UTF_8);
+
+      Method loadMethod = solverClass.getMethod("load", Iterable.class);
+
+      ((Runnable) loadMethod.invoke(null, puzzleLines)).run();
+    }
   }
 }

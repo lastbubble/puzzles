@@ -4,6 +4,8 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -13,27 +15,45 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiPredicate;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import com.lastbubble.puzzle.Cell;
 import com.lastbubble.puzzle.Grid;
 import com.lastbubble.puzzle.GridPrinter;
 import com.lastbubble.puzzle.Pos;
 
-public abstract class Boomerangs implements Runnable {
+public class Boomerangs implements Runnable {
 
-  private final Set<Pos> dots = new HashSet<>();
+  public static Boomerangs load(Iterable<String> lines) {
+    Grid.Builder<Boolean> gridBuilder = Grid.builder(Boolean.class);
+
+    Pattern sizePtn = Pattern.compile("(\\d+)x(\\d+)");
+    Pattern dotPtn = Pattern.compile("(\\d+),(\\d+)");
+    Matcher m;
+
+    for (String line : lines) {
+      if ((m = dotPtn.matcher(line)).matches()) {
+        Pos dot = Pos.at(Integer.valueOf(m.group(1)), Integer.valueOf(m.group(2)));
+        gridBuilder.add(Cell.at(dot).withValue(true));
+
+      } else if ((m = sizePtn.matcher(line)).matches()) {
+        int width = Integer.valueOf(m.group(1));
+        int height = Integer.valueOf(m.group(2));
+        gridBuilder.add(Cell.at(width - 1, height - 1));
+      }
+    }
+
+    return new Boomerangs(gridBuilder.build());
+  }
+
   private final Grid<Boolean> grid;
+  private final Set<Pos> dots;
 
-  protected Boomerangs(int width, int height, Pos... dots) {
-
-    for (Pos dot : dots) { this.dots.add(dot); }
-
-    Grid.Builder<Boolean> gridBuilder = Grid.builder(Boolean.class)
-      .add(Cell.at(width - 1, height - 1));
-
-    this.dots.forEach(dot -> gridBuilder.add(Cell.at(dot).withValue(true)));
-
-    grid = gridBuilder.build();
+  private Boomerangs(Grid<Boolean> grid) {
+    this.grid = grid;
+    this.dots = grid.filledCells().map(Cell::pos).collect(Collectors.toSet());
   }
 
   @Override public void run() {
@@ -83,7 +103,9 @@ public abstract class Boomerangs implements Runnable {
       }
     }
 
-    return ells;
+    List<Ell> sortedElls = new ArrayList<>(ells);
+    Collections.sort(sortedElls, Comparator.<Ell, Integer>comparing(ell -> ell.length).reversed());
+    return sortedElls;
   }
 
   protected Iterable<Ell> generateHorizontalElls(Pos left, Pos right) {

@@ -9,36 +9,99 @@ import com.lastbubble.puzzle.Pos;
 import com.lastbubble.puzzle.solver.Solver;
 
 import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.BiPredicate;
 import java.util.function.Predicate;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
-public abstract class Logisquares implements Runnable {
+public class Logisquares implements Runnable {
 
-  protected Solver<Pos> solver = new Solver<>();
+  public static Logisquares load(Iterable<String> lines) {
+    Iterator<String> lineIter = lines.iterator();
 
-  protected Grid<Character> grid;
+    Grid.Builder<Character> gridBuilder = Grid.builder(Character.class);
+    Map<Integer, Integer> minesInRow = new HashMap<>();
 
-  @Override public void run() {
-    grid = definePuzzle().build();
-    print(grid);
-    addConstraints();
-    solvePuzzle();
+    int y = 0;
+    while (lineIter.hasNext()) {
+      String line = lineIter.next();
+      if (line.startsWith("---")) { break; }
+      int pipe = line.indexOf('|');
+      if (pipe > -1) {
+        String[] cells = line.substring(0, pipe).split(",");
+        gridBuilder.add(Cell.at(cells.length - 1, y));
+        for (int x = 0; x < cells.length; x++) {
+          if (!cells[x].equals(" ")) { gridBuilder.add(Cell.at(x, y).withValue(cells[x].charAt(0))); }
+        }
+        if ((pipe + 1) < line.length()) {
+          minesInRow.put(y, Integer.valueOf(line.substring(pipe + 1)));
+        }
+        y++;
+      }
+    }
+    Grid<Character> loadedGrid = gridBuilder.build();
+
+    Map<Integer, Integer> minesInColumn = new HashMap<>();
+    while (lineIter.hasNext()) {
+      String line = lineIter.next();
+      if (line.startsWith("---")) { break; }
+      for (int x = 0; x <= line.length() / 2; x++) {
+        char c = line.charAt(x * 2);
+        if (c != ' ') { minesInColumn.put(x, c - '0'); }
+      }
+    }
+
+    Pattern posPtn = Pattern.compile("(\\d+),(\\d+)");
+    List<Set<Pos>> regions = new ArrayList<>();
+    while (lineIter.hasNext()) {
+      Set<Pos> region = new HashSet<>();
+      Matcher m = posPtn.matcher(lineIter.next());
+      while (m.find()) {
+        region.add(Pos.at(Integer.valueOf(m.group(1)), Integer.valueOf(m.group(2))));
+      }
+      regions.add(region);
+    }
+
+    return new Logisquares(loadedGrid, regions, minesInRow, minesInColumn);
   }
 
-  protected abstract Grid.Builder<Character> definePuzzle();
+  private final Grid<Character> grid;
+  private final BiPredicate<Pos, Pos> sameRegion;
 
-  protected abstract void addRowAndColumnCounts();
+  private final Solver<Pos> solver = new Solver<>();
 
-  protected abstract Stream<Stream<Pos>> regions();
-
-  protected void addConstraints() {
-
+  private Logisquares(
+    Grid<Character> grid,
+    Iterable<Set<Pos>> regions,
+    Map<Integer, Integer> minesInRow,
+    Map<Integer, Integer> minesInColumn
+  ) {
+    this.grid = grid;
     grid.filledCells().forEach(c -> addConstraintsFor(c));
 
-    addRowAndColumnCounts();
 
-    regions().forEach(r -> solver.addExactly(1, r.map(solver::varFor)));
+    Map<Pos, Set<Pos>> regionForPos = new HashMap<>();
+    for (Set<Pos> region : regions) {
+      solver.addExactly(1, region.stream().map(solver::varFor));
+      region.forEach(pos -> regionForPos.put(pos, region));
+    }
+    sameRegion = (a, b) -> regionForPos.get(a) == regionForPos.get(b);
+
+    minesInRow.forEach((row, count) -> minesInRow(count, row));
+    minesInColumn.forEach((column, count) -> minesInColumn(count, column));
+  }
+
+  @Override public void run() {
+    print(grid);
+    solvePuzzle();
   }
 
   protected void addConstraintsFor(Cell<Character> c) {
@@ -50,7 +113,6 @@ public abstract class Logisquares implements Runnable {
       );
 
     } else {
-
       Stream.of(Arrow.values()).filter(a -> a.symbol() == value).forEach(a ->
         solver.add(anyOf(grid.positions().filter(a.pointsAt(c.pos())).filter(p -> !grid.valueAt(p).isPresent()).map(solver::varFor)))
       );
@@ -79,14 +141,14 @@ public abstract class Logisquares implements Runnable {
 
     while (true) {
 
-      Grid.Builder<Character> gridBuilder = definePuzzle();
+      Grid.Builder<Character> gridBuilder = Grid.builder(Character.class).copyOf(grid);
 
       try {
         Set<Pos> solution = solver.solve();
 
         if (solution.isEmpty()) { break; }
 
-        solution.stream().forEach(p -> gridBuilder.add(Cell.at(p).withValue('O')));
+        solution.stream().forEach(p -> gridBuilder.add(Cell.at(p).withValue('\u25CF')));
 
         solver.add(not(allOf(solution.stream().map(solver::varFor))));
 
@@ -109,7 +171,7 @@ public abstract class Logisquares implements Runnable {
   private final GridPrinter<Character> gridPrinter = new GridPrinter<>(c -> c);
 
   protected void print(Grid<Character> grid) {
-    gridPrinter.printTo( new PrintWriter(System.out, true), grid);
+    gridPrinter.printTo( new PrintWriter(System.out, true), grid, sameRegion);
   }
 
   public enum Arrow {

@@ -72,6 +72,12 @@ public class Grid<V> {
       return this;
     }
 
+    public Builder<V> copyOf(Grid<V> grid) {
+      add(Cell.at(grid.width() - 1, grid.height() - 1));
+      grid.filledCells().forEach(c -> add(c));
+      return this;
+    }
+
     @SuppressWarnings("unchecked")
     public Grid<V> build() {
       V[][] values = (V[][]) Array.newInstance(valueClass, xMax + 1, yMax + 1);

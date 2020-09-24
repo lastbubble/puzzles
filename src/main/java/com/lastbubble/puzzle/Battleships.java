@@ -8,33 +8,100 @@ import com.lastbubble.puzzle.solver.Solver;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-public abstract class Battleships implements Runnable {
+public class Battleships implements Runnable {
 
-  protected Solver<Cell<Value>> solver = new Solver<>();
+  public static Battleships load(Iterable<String> lines) {
+    Iterator<String> lineIter = lines.iterator();
 
-  protected final Grid<Value> grid = gridBuilder().build();
+    List<Integer> rowCounts = new ArrayList<>();
+    Grid.Builder<Character> gridBuilder = Grid.builder(Character.class);
+
+    int y = 0;
+    while (lineIter.hasNext()) {
+      String line = lineIter.next();
+      if (line.startsWith("---")) { break; }
+      int pipe = line.indexOf('|');
+      if (pipe > -1) {
+        String[] cells = line.substring(0, pipe).split(",");
+        gridBuilder.add(Cell.at(cells.length - 1, y));
+        for (int x = 0; x < cells.length; x++) {
+          if (!cells[x].equals(" ")) { gridBuilder.add(Cell.at(x, y).withValue(cells[x].charAt(0))); }
+        }
+        rowCounts.add(line.charAt(pipe + 1) - '0');
+        y++;
+      }
+    }
+    Grid<Character> loadedGrid = gridBuilder.build();
+
+    List<Integer> columnCounts = new ArrayList<>();
+    while (lineIter.hasNext()) {
+      String line = lineIter.next();
+      if (line.startsWith("---")) { break; }
+      for (int x = 0; x <= line.length() / 2; x++) {
+        columnCounts.add(line.charAt(x * 2) - '0');
+      }
+    }
+
+    return new Battleships(loadedGrid, rowCounts, columnCounts);
+  }
+
+  private Solver<Cell<Value>> solver = new Solver<>();
+
+  private final Grid<Value> grid;
+  private final List<Integer> rowCounts;
+  private final List<Integer> columnCounts;
+
+  private final Set<Pos> mustBeFilled = new HashSet<>();
+
+  private Battleships(Grid<Character> loadedGrid, List<Integer> rowCounts, List<Integer> columnCounts) {
+    grid = Grid.builder(Value.class)
+      .add(Cell.at(loadedGrid.width() - 1, loadedGrid.height() - 1))
+      .build();
+    this.rowCounts = rowCounts;
+    this.columnCounts = columnCounts;
+    loadedGrid.filledCells().forEach(cell -> {
+      switch (cell.value().get()) {
+        case '\u25B2':
+          addShipStartAt(cell.pos());
+          mustBeFilled.add(Pos.at(cell.pos().x(), cell.pos().y() + 1));
+          break;
+        case '\u25B6':
+          addShipStartAt(cell.pos());
+          mustBeFilled.add(Pos.at(cell.pos().x() - 1, cell.pos().y()));
+          break;
+        case '\u25BC':
+          addShipStartAt(cell.pos());
+          mustBeFilled.add(Pos.at(cell.pos().x(), cell.pos().y() - 1));
+          break;
+        case '\u25C0':
+          addShipStartAt(cell.pos());
+          mustBeFilled.add(Pos.at(cell.pos().x() + 1, cell.pos().y()));
+          break;
+        case '\u25CF':
+          addSubmarineAt(cell.pos());
+          break;
+        case '\u25FB':
+          addWaterAt(cell.pos());
+          break;
+        case '\u25FC':
+          addShipSectionAt(cell.pos());
+          break;
+      }
+    });
+  }
 
   @Override public void run() {
     addConstraints();
-    addValues();
     solvePuzzle();
   }
-
-  private Grid.Builder<Value> gridBuilder() {
-    return Grid.builder(Value.class)
-      .add(Cell.at((int) columnCounts().count() - 1, (int) rowCounts().count() - 1));
-  }
-
-  protected abstract IntStream rowCounts();
-
-  protected abstract IntStream columnCounts();
-
-  protected abstract void addValues();
 
   protected void addConstraints() {
     grid.positions().forEach(p -> {
@@ -204,11 +271,9 @@ public abstract class Battleships implements Runnable {
       )
     );
 
-    int[] columnCounts = columnCounts().toArray();
-    for (int col = 0; col < columnCounts.length; col++) { shipSectionsInColumn(columnCounts[col], col); }
+    for (int col = 0; col < columnCounts.size(); col++) { shipSectionsInColumn(columnCounts.get(col), col); }
 
-    int[] rowCounts = rowCounts().toArray();
-    for (int row = 0; row < rowCounts.length; row++) { shipSectionsInRow(rowCounts[row], row); }
+    for (int row = 0; row < rowCounts.size(); row++) { shipSectionsInRow(rowCounts.get(row), row); }
   }
 
   protected Stream<Cell<Value>> shipFor(Pos... ship) {
@@ -240,6 +305,8 @@ public abstract class Battleships implements Runnable {
     );
   }
 
+  protected void addShipStartAt(Pos pos) { addShipStartAt(pos.x(), pos.y()); }
+
   protected void addShipStartAt(int x, int y) {
     solver.addExactly(1,
       Stream.of(Value.DESTROYER_START, Value.CRUISER_START, Value.BATTLESHIP_START)
@@ -248,9 +315,41 @@ public abstract class Battleships implements Runnable {
     );
   }
 
-  protected void addShipSectionAt(int x, int y) { addValueAt(x, y, Value.SHIP_SECTION); }
+  protected void addShipSectionAt(Pos pos) { addShipSectionAt(pos.x(), pos.y()); }
+
+  protected void addShipSectionAt(int x, int y) {
+    addValueAt(x, y, Value.SHIP_SECTION);
+    if (y == 0 || y == (grid.height() - 1)) {
+      solver.addExactly(1,
+        Stream.of(Value.CRUISER_START, Value.BATTLESHIP_START, Value.SHIP_SECTION)
+          .map(v -> cell(x - 1, y).withValue(v))
+          .map(solver::varFor)
+      );
+      solver.addExactly(1,
+        Stream.of(Value.CRUISER_START, Value.BATTLESHIP_START, Value.SHIP_SECTION)
+          .map(v -> cell(x + 1, y).withValue(v))
+          .map(solver::varFor)
+      );
+    }
+    if (x == 0 || x == (grid.width() - 1)) {
+      solver.addExactly(1,
+        Stream.of(Value.CRUISER_START, Value.BATTLESHIP_START, Value.SHIP_SECTION)
+          .map(v -> cell(x, y - 1).withValue(v))
+          .map(solver::varFor)
+      );
+      solver.addExactly(1,
+        Stream.of(Value.CRUISER_START, Value.BATTLESHIP_START, Value.SHIP_SECTION)
+          .map(v -> cell(x, y + 1).withValue(v))
+          .map(solver::varFor)
+      );
+    }
+  }
+
+  protected void addSubmarineAt(Pos pos) { addSubmarineAt(pos.x(), pos.y()); }
 
   protected void addSubmarineAt(int x, int y) { addValueAt(x, y, Value.SUBMARINE); }
+
+  protected void addWaterAt(Pos pos) { addWaterAt(pos.x(), pos.y()); }
 
   protected void addWaterAt(int x, int y) { addValueAt(x, y, Value.WATER); }
 
@@ -260,7 +359,7 @@ public abstract class Battleships implements Runnable {
 
     while (true) {
 
-      Grid.Builder<Value> gridBuilder = gridBuilder();
+      Grid.Builder<Value> gridBuilder = Grid.builder(Value.class).copyOf(grid);
 
       try {
         Set<Cell<Value>> solution = solver.solve();
@@ -287,7 +386,12 @@ public abstract class Battleships implements Runnable {
 
   protected static Cell<Value> cell(Pos p, Value v) { return cell(p.x(), p.y()).withValue(v); }
 
-  protected boolean isValid(Grid<Value> grid) { return true; }
+  protected boolean isValid(Grid<Value> grid) {
+    for (Pos pos : mustBeFilled) {
+      if (!isFilled(grid, pos.x(), pos.y())) { return false; }
+    }
+    return true;
+  }
 
   protected final boolean isFilled(Grid<Value> grid, int x, int y) {
     return grid.valueAt(x, y).orElse(null) == Value.SHIP_SECTION;
@@ -302,14 +406,13 @@ public abstract class Battleships implements Runnable {
 
     String[] lines = out.toString().split("\\n");
 
-    int[] rowCounts = rowCounts().toArray();
-    for (int row = 0; row < rowCounts.length; row++) {
-      lines[2 * row + 1] += " " + rowCounts[row];
+    for (int row = 0; row < rowCounts.size(); row++) {
+      lines[2 * row + 1] += " " + rowCounts.get(row);
     }
 
     for(String line : lines) { System.out.println(line); }
 
-    System.out.println(columnCounts().mapToObj(x -> String.valueOf(x)).collect(joining(" ", " ", "")));
+    System.out.println(columnCounts.stream().map(x -> String.valueOf(x)).collect(joining(" ", " ", "")));
   }
 
   public enum Value {

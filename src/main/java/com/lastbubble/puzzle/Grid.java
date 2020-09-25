@@ -9,9 +9,13 @@ import java.util.stream.Stream;
 
 public class Grid<V> {
 
+  private final Class<V> valueClass;
   private final V[][] values;
 
-  private Grid(V[][] values) { this.values = values; }
+  private Grid(Class<V> valueClass, V[][] values) {
+    this.valueClass = valueClass;
+    this.values = values;
+  }
 
   public int width() { return values.length; }
 
@@ -84,7 +88,40 @@ public class Grid<V> {
 
       cells.stream().forEach(c -> values[c.pos().x()][c.pos().y()] = c.value().orElse(null));
 
-      return new Grid<V>(values);
+      return new Grid<V>(valueClass, values);
+    }
+  }
+
+  public Overlay<V> overlay() { return new Overlay<V>(this); }
+
+  public static class Overlay<V> {
+
+    private Grid<V> grid;
+    private final List<Cell<V>> addedCells = new ArrayList<>();
+
+    private Overlay(Grid<V> grid) { this.grid = grid; }
+
+    public Overlay<V> add(Cell<V> cell) {
+      if (cell.value().isEmpty()) {
+        throw new IllegalArgumentException("Can only overlay if cell has a value");
+      }
+      V value = cell.value().get();
+      if (!value.equals(grid.valueAt(cell.pos()).orElse(value))) {
+        throw new IllegalArgumentException(
+          String.format("Cannot overlay existing value with different value (%s != %s)",
+            grid.valueAt(cell.pos()), value
+          )
+        );
+      }
+      addedCells.add(cell);
+      return this;
+    }
+
+    public Grid<V> finish() {
+      if (addedCells.isEmpty()) { return grid; }
+      Grid.Builder<V> gridBuilder = Grid.builder(grid.valueClass).copyOf(grid);
+      addedCells.forEach(cell -> gridBuilder.add(cell));
+      return gridBuilder.build();
     }
   }
 }

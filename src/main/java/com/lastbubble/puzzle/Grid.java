@@ -1,9 +1,13 @@
 package com.lastbubble.puzzle;
 
+import static com.lastbubble.puzzle.Border.Weight.*;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -51,11 +55,74 @@ public class Grid<V> {
 
   public Optional<V> valueAt(int x, int y) { return Optional.ofNullable(values[x][y]); }
 
+  public Stream<Cell<V>> cellsMatching(Predicate<Cell<V>> match) {
+    return positions().map(p -> Cell.at(p).withValue(values[p.x()][p.y()])).filter(match);
+  }
+
   public Stream<Cell<V>> filledCells() {
     return positions().filter(p -> values[p.x()][p.y()] != null).map(p -> Cell.at(p).withValue(values[p.x()][p.y()]));
   }
 
+  public void printTo(BiConsumer<Pos, Character> consumer, Function<V, Character> toChar) {
+    positions().forEach(pos -> {
+      int consumerX = pos.x() * 2, consumerY = pos.y() * 2;
+      // upper left
+      consumer.accept(Pos.at(consumerX, consumerY), 
+        Border.builder()
+          .top(pos.y() > 0 ? LIGHT : NONE)
+          .left(pos.x() > 0 ? LIGHT : NONE)
+          .right(LIGHT)
+          .bottom(LIGHT)
+          .build()
+      );
+      // above
+      consumer.accept(Pos.at(consumerX + 1, consumerY), Border.horizontal(LIGHT));
+      // left
+      consumer.accept(Pos.at(consumerX, consumerY + 1), Border.vertical(LIGHT));
+      // value
+      valueAt(pos).map(toChar).ifPresent(c -> consumer.accept(Pos.at(consumerX + 1, consumerY + 1), c));
+    });
+    // right edge
+    IntStream.range(0, height()).forEach(y -> {
+      int rasterX = 2 * width(), rasterY = 2 * y;
+      consumer.accept(Pos.at(rasterX, rasterY),
+        Border.builder()
+          .top(y > 0 ? LIGHT : NONE)
+          .left(LIGHT)
+          .bottom(LIGHT)
+          .build()
+      );
+      consumer.accept(Pos.at(rasterX, rasterY + 1), Border.vertical(LIGHT));
+    });
+    // bottom edge
+    IntStream.range(0, width()).forEach(x -> {
+      int rasterX = 2 * x, rasterY = 2 * height();
+      consumer.accept(Pos.at(rasterX, rasterY),
+        Border.builder()
+          .top(LIGHT)
+          .left(x > 0 ? LIGHT : NONE)
+          .right(LIGHT)
+          .build()
+      );
+      consumer.accept(Pos.at(rasterX + 1, rasterY), Border.horizontal(LIGHT));
+    });
+    // bottom right cornder
+    consumer.accept(Pos.at(2 * width(), 2 * height()),
+      Border.builder().top(LIGHT).left(LIGHT).build()
+    );
+  }
+
+  public Builder<V> copy() {
+    Grid.Builder<V> builder = builder(valueClass).add(Cell.at(width() - 1, height() - 1));
+    filledCells().forEach(c -> builder.add(c));
+    return builder;
+  }
+
   public static <V> Builder<V> builder(Class<V> valueClass) { return new Builder<V>(valueClass); }
+
+  public static <V> Builder<V> builder(Class<V> valueClass, int size) {
+    return new Builder<V>(valueClass).add(Cell.at(size - 1, size - 1));
+  }
 
   public static class Builder<V> {
 

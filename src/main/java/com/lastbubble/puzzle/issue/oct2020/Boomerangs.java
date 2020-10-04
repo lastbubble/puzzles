@@ -1,7 +1,5 @@
 package com.lastbubble.puzzle.issue.oct2020;
 
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -19,10 +17,13 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import com.lastbubble.puzzle.Cell;
-import com.lastbubble.puzzle.Grid;
-import com.lastbubble.puzzle.GridPrinter;
-import com.lastbubble.puzzle.Pos;
+import com.lastbubble.puzzle.common.Cell;
+import com.lastbubble.puzzle.common.Direction;
+import com.lastbubble.puzzle.common.CharRaster;
+import com.lastbubble.puzzle.common.Grid;
+import com.lastbubble.puzzle.common.GridPrinter;
+import com.lastbubble.puzzle.common.Mover;
+import com.lastbubble.puzzle.common.Pos;
 
 public class Boomerangs implements Runnable {
 
@@ -49,11 +50,13 @@ public class Boomerangs implements Runnable {
   }
 
   private final Grid<Boolean> grid;
+  private final Mover move;
   private final Set<Pos> dots;
 
   private Boomerangs(Grid<Boolean> grid) {
     this.grid = grid;
-    this.dots = grid.filledCells().map(Cell::pos).collect(Collectors.toSet());
+    move = grid.mover();
+    this.dots = grid.cellsMatching(c -> c.value().isPresent()).map(Cell::pos).collect(Collectors.toSet());
   }
 
   @Override public void run() {
@@ -115,22 +118,22 @@ public class Boomerangs implements Runnable {
     int length = right.x() - left.x();
     if (length > 0) {
 
-      Optional<Pos> upLeft = move(left, Direction.UP, length);
+      Optional<Pos> upLeft = move.up(left, length);
       if (upLeft.isPresent()) {
         ells.add( new Ell(left, length, Direction.UP, Direction.RIGHT));
       }
 
-      Optional<Pos> downLeft = move(left, Direction.DOWN, length);
+      Optional<Pos> downLeft = move.down(left, length);
       if (downLeft.isPresent()) {
         ells.add( new Ell(left, length, Direction.DOWN, Direction.RIGHT));
       }
 
-      Optional<Pos> upRight = move(right, Direction.UP, length);
+      Optional<Pos> upRight = move.up(right, length);
       if (upRight.isPresent()) {
         ells.add( new Ell(right, length, Direction.UP, Direction.LEFT));
       }
 
-      Optional<Pos> downRight = move(right, Direction.DOWN, length);
+      Optional<Pos> downRight = move.down(right, length);
       if (downRight.isPresent()) {
         ells.add( new Ell(right, length, Direction.DOWN, Direction.LEFT));
       }
@@ -146,22 +149,22 @@ public class Boomerangs implements Runnable {
     int length = bottom.y() - top.y();
     if (length > 0) {
 
-      Optional<Pos> leftTop = move(top, Direction.LEFT, length);
+      Optional<Pos> leftTop = move.left(top, length);
       if (leftTop.isPresent()) {
         ells.add( new Ell(top, length, Direction.DOWN, Direction.LEFT));
       }
 
-      Optional<Pos> rightTop = move(top, Direction.RIGHT, length);
+      Optional<Pos> rightTop = move.right(top, length);
       if (rightTop.isPresent()) {
         ells.add( new Ell(top, length, Direction.DOWN, Direction.RIGHT));
       }
 
-      Optional<Pos> leftBottom = move(bottom, Direction.LEFT, length);
+      Optional<Pos> leftBottom = move.left(bottom, length);
       if (leftBottom.isPresent()) {
         ells.add( new Ell(bottom, length, Direction.UP, Direction.LEFT));
       }
 
-      Optional<Pos> rightBottom = move(bottom, Direction.RIGHT, length);
+      Optional<Pos> rightBottom = move.right(bottom, length);
       if (rightBottom.isPresent()) {
         ells.add( new Ell(bottom, length, Direction.UP, Direction.RIGHT));
       }
@@ -174,7 +177,7 @@ public class Boomerangs implements Runnable {
 
     Pos furthest = pos;
     Optional<Pos> nextPos;
-    while ((nextPos = move(furthest, direction, 1)).isPresent()) {
+    while ((nextPos = move.move(direction, furthest, 1)).isPresent()) {
       if (dots.contains(nextPos.get())) { break; }
       furthest = nextPos.get();
     }
@@ -200,15 +203,10 @@ public class Boomerangs implements Runnable {
   }
 
   protected void printSolution(Solution solution) {
-
-    GridPrinter<Boolean> gridPrinter = new GridPrinter<>(b -> b ? '\u25CF' : ' ');
-    gridPrinter.suppressIntraRegionBorders();
-
-    StringWriter out = new StringWriter();
-
-    gridPrinter.printTo( new PrintWriter(out), grid, solution);
-
-    System.out.println(out.toString());
+    CharRaster raster = CharRaster.builder().ofWidth(2 * grid.width() + 1).ofHeight(2 * grid.height() + 1).build();
+    GridPrinter<Boolean> printer = new GridPrinter<Boolean>(raster::set, b -> b ? '\u25CF' : ' ');
+    printer.suppressBorderBetweenConnectedCells().print(grid, solution);
+    raster.lines().forEach(System.out::println);
   }
 
   protected static class Solution implements BiPredicate<Pos, Pos> {
@@ -231,21 +229,6 @@ public class Boomerangs implements Runnable {
     @Override public boolean test(Pos a, Pos b) { return ellForPos.get(a) == ellForPos.get(b); }
   }
 
-  public enum Direction {
-    UP, LEFT, DOWN, RIGHT;
-    public Direction opposite() { return Direction.values()[(ordinal() + 2) & 3]; }
-  }
-
-  protected Optional<Pos> move(Pos pos, Direction direction, int steps) {
-    switch (direction) {
-      case    UP: return grid.validPos(pos.x(), pos.y() - steps);
-      case  LEFT: return grid.validPos(pos.x() - steps, pos.y());
-      case  DOWN: return grid.validPos(pos.x(), pos.y() + steps);
-      case RIGHT: return grid.validPos(pos.x() + steps, pos.y());
-      default: throw new AssertionError("unsupported direction: " + direction);
-    }
-  }
-
   protected class Ell implements Iterable<Pos> {
 
     private final Pos vertex;
@@ -256,7 +239,7 @@ public class Boomerangs implements Runnable {
 
     protected Ell(Pos vertex, int length, Direction d1, Direction d2) {
       if (d1 == d2 || d1 == d2.opposite()) {
-        throw new IllegalArgumentException(String.format("%d and %d do not form an ell", d1, d2));
+        throw new IllegalArgumentException(String.format("%s and %s do not form an ell", d1, d2));
       }
       this.vertex = vertex;
       this.length = length;
@@ -264,8 +247,8 @@ public class Boomerangs implements Runnable {
       this.d2 = d2;
       cells.add(vertex);
       for (int i = 1; i <= length; i++) {
-        cells.add(move(vertex, d1, i).get());
-        cells.add(move(vertex, d2, i).get());
+        cells.add(move.move(d1, vertex, i).get());
+        cells.add(move.move(d2, vertex, i).get());
       }
     }
 

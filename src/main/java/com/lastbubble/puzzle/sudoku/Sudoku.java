@@ -2,13 +2,13 @@ package com.lastbubble.puzzle.sudoku;
 
 import static com.lastbubble.puzzle.logic.Formula.*;
 
-import com.lastbubble.puzzle.Cell;
-import com.lastbubble.puzzle.Grid;
-import com.lastbubble.puzzle.GridPrinter;
-import com.lastbubble.puzzle.Pos;
+import com.lastbubble.puzzle.common.Cell;
+import com.lastbubble.puzzle.common.CharRaster;
+import com.lastbubble.puzzle.common.Grid;
+import com.lastbubble.puzzle.common.GridPrinter;
+import com.lastbubble.puzzle.common.Pos;
 import com.lastbubble.puzzle.solver.Solver;
 
-import java.io.PrintWriter;
 import java.util.Set;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -135,9 +135,10 @@ public class Sudoku implements Runnable {
 
   protected boolean isValid(Grid<Character> grid) { return true; }
 
-  private final GridPrinter<Character> gridPrinter = new GridPrinter<>(c -> c);
-
   protected void print(Grid<Character> grid) {
-    gridPrinter.printTo( new PrintWriter(System.out, true), grid);
+    CharRaster raster = CharRaster.builder().ofWidth(2 * grid.width() + 1).ofHeight(2 * grid.height() + 1).build();
+    GridPrinter<Character> printer = new GridPrinter<Character>(raster::set, c -> c);
+    printer.print(grid);
+    raster.lines().forEach(System.out::println);
   }
 }

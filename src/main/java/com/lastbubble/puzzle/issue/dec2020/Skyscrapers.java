@@ -15,10 +15,11 @@ import java.util.Collections;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import com.lastbubble.puzzle.Cell;
-import com.lastbubble.puzzle.CharRaster;
-import com.lastbubble.puzzle.Grid;
-import com.lastbubble.puzzle.Pos;
+import com.lastbubble.puzzle.common.Cell;
+import com.lastbubble.puzzle.common.CharRaster;
+import com.lastbubble.puzzle.common.Grid;
+import com.lastbubble.puzzle.common.GridPrinter;
+import com.lastbubble.puzzle.common.Pos;
 
 public class Skyscrapers implements Runnable{
 
@@ -174,7 +175,7 @@ public class Skyscrapers implements Runnable{
     private final Grid<Integer> grid;
 
     private Solution(EnumMap<Direction, List<Optional<Integer>>> directionCounts, int size) {
-      this(directionCounts, Grid.builder(Integer.class, size).build());
+      this(directionCounts, Grid.builder(Integer.class).squareWithSize(size).build());
     }
 
     private Solution(EnumMap<Direction, List<Optional<Integer>>> directionCounts, Grid<Integer> grid) {
@@ -319,7 +320,12 @@ public class Skyscrapers implements Runnable{
         direction.printTo(counts.stream().map(n -> n.map(toChar)).collect(toList()), raster::set)
       );
   
-      grid.printTo((pos, c) -> { raster.set(Pos.at(pos.x() + 2, pos.y() + 2), c); }, toChar);
+      GridPrinter<Integer> gridPrinter = new GridPrinter<Integer>(
+        (pos, c) -> { raster.set(Pos.at(pos.x() + 2, pos.y() + 2), c); },
+        toChar
+      );
+
+      gridPrinter.print(grid);
 
       return raster;
     }

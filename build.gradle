@@ -6,9 +6,11 @@ mainClassName = 'com.lastbubble.puzzle.Main'
 
 repositories {
   mavenCentral()
+  mavenLocal()
 }
 
 dependencies {
+  compile 'com.lastbubble:puzzle-common:0.1-SNAPSHOT'
   compile 'org.ow2.sat4j:org.ow2.sat4j.core:2.3.4'
 
   testCompile 'junit:junit:4.12'

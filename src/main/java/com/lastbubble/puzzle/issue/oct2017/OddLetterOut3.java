@@ -3,7 +3,8 @@ package com.lastbubble.puzzle.issue.oct2017;
 import static com.lastbubble.puzzle.logic.Formula.*;
 import static java.util.stream.Collectors.joining;
 
-import com.lastbubble.puzzle.Grid;
+import com.lastbubble.puzzle.common.Grid;
+import com.lastbubble.puzzle.common.Mover;
 
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -16,6 +17,8 @@ public class OddLetterOut3 extends OddLetterOut {
       solver.addExactly(1, blankGrid.positions().map(p -> cell(p, c)).map(solver::varFor))
     );
 
+    Mover move = blankGrid.mover();
+
     allValues().forEach(
       c -> {
         solver.addAtMost(1, blankGrid.positions().map(p -> cell(p, c)).map(solver::varFor));
@@ -25,7 +28,7 @@ public class OddLetterOut3 extends OddLetterOut {
             solver.add(
               implies(
                 solver.varFor(cell(p, c)),
-                not(anyOf(blankGrid.neighborsOf(p).map(n -> cell(n, (char) (c + 1))).map(solver::varFor)))
+                not(anyOf(move.neighborsOf(p).map(n -> cell(n, (char) (c + 1))).map(solver::varFor)))
               )
             )
           );
@@ -36,7 +39,7 @@ public class OddLetterOut3 extends OddLetterOut {
             solver.add(
               implies(
                 solver.varFor(cell(p, c)),
-                not(anyOf(blankGrid.neighborsOf(p).map(n -> cell(n, (char) (c - 1))).map(solver::varFor)))
+                not(anyOf(move.neighborsOf(p).map(n -> cell(n, (char) (c - 1))).map(solver::varFor)))
               )
             )
           );

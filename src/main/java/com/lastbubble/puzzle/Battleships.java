@@ -1,15 +1,18 @@
 package com.lastbubble.puzzle;
 
-import static java.util.stream.Collectors.joining;
-
-import java.io.PrintWriter;
-import java.io.StringWriter;
+import com.lastbubble.puzzle.common.CharRaster;
+import com.lastbubble.puzzle.common.Cell;
+import com.lastbubble.puzzle.common.Grid;
+import com.lastbubble.puzzle.common.GridPrinter;
+import com.lastbubble.puzzle.common.Mover;
+import com.lastbubble.puzzle.common.Pos;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -143,8 +146,8 @@ public class Battleships implements Runnable {
   }
 
   private Grid<Character> extendShipStarts(Grid<Character> grid) {
-    Grid.Overlay<Character> gridOverlay = grid.overlay();
-    grid.filledCells().forEach(cell -> {
+    Grid.Builder<Character> gridOverlay = grid.copy();
+    grid.cellsMatching(c -> c.value().isPresent()).forEach(cell -> {
       switch (cell.value().get()) {
         case SHIP_START_NORTH:
           gridOverlay.add(Cell.at(cell.pos().x(), cell.pos().y() + 1).withValue(SOME_SHIP_PART));
@@ -161,11 +164,11 @@ public class Battleships implements Runnable {
         }
       }
     );
-    return gridOverlay.finish();
+    return gridOverlay.addedCells() ? gridOverlay.build() : grid;
   }
 
   private Grid<Character> fillCompletedRowsAndColumnsWithWater(Grid<Character> grid) {
-    Grid.Overlay<Character> gridOverlay = grid.overlay();
+    Grid.Builder<Character> gridOverlay = grid.copy();
     IntStream.range(0, rowCounts.size()).forEach(col -> {
       int count = rowCounts.get(col);
       int filled = (int) IntStream.range(0, columnCounts.size()).mapToObj(row -> Pos.at(row, col)).filter(pos -> grid.valueAt(pos).orElse(WATER) != WATER).count();
@@ -180,113 +183,110 @@ public class Battleships implements Runnable {
         IntStream.range(0, rowCounts.size()).mapToObj(col -> Pos.at(row, col)).filter(pos -> grid.valueAt(pos).isEmpty()).forEach(pos -> gridOverlay.add(Cell.at(pos).withValue(WATER)));
       }
     });
-    return gridOverlay.finish();
+    return gridOverlay.addedCells() ? gridOverlay.build() : grid;
   }
 
   private Grid<Character> surroundShipsWithWater(Grid<Character> grid) {
-    Grid.Overlay<Character> gridOverlay = grid.overlay();
-    grid.filledCells().filter(cell -> cell.value().orElse(WATER) != WATER).forEach(cell -> {
-      waterSurrounding(grid, cell.pos(), cell.value().get()).filter(pos -> grid.valueAt(pos).isEmpty()).forEach(pos -> gridOverlay.add(Cell.at(pos).withValue(WATER)));
-    });
-    return gridOverlay.finish();
-  }
+    Grid.Builder<Character> gridOverlay = grid.copy();
+    grid.cellsMatching(c -> c.value().isPresent())
+      .filter(cell -> cell.value().orElse(WATER) != WATER)
+      .forEach(cell -> {
+        waterSurrounding(grid, cell.pos(), cell.value().get()).filter(pos -> grid.valueAt(pos).isEmpty()).forEach(pos -> gridOverlay.add(Cell.at(pos).withValue(WATER)));
+      });
+    return gridOverlay.addedCells() ? gridOverlay.build() : grid;
+    }
 
   private Stream<Pos> waterSurrounding(Grid<Character> grid, Pos pos, char section) {
+    Mover move = grid.mover();
     switch (section) {
-      case SUBMARINE: return grid.neighborsOf(pos);
+      case SUBMARINE: return move.neighborsOf(pos);
       case SOME_SHIP_PART: {
-        int x = pos.x(), y = pos.y();
         return Stream.of(
-          grid.validPos(x - 1, y - 1),
-          grid.validPos(x + 1, y - 1),
-          grid.validPos(x + 1, y + 1),
-          grid.validPos(x - 1, y + 1)
-        ).filter(Optional::isPresent).map(Optional::get);
+          move.up(pos).flatMap(move::left),
+          move.up(pos).flatMap(move::right),
+          move.down(pos).flatMap(move::right),
+          move.down(pos).flatMap(move::left)
+        ).flatMap(Optional::stream);
       }
       case SHIP_SECTION: {
-        int x = pos.x(), y = pos.y();
         List<Optional<Pos>> ifNeighbors = Stream.of(
-          grid.validPos(x - 1, y - 1),
-          grid.validPos(x + 1, y - 1),
-          grid.validPos(x + 1, y + 1),
-          grid.validPos(x - 1, y + 1)
+          move.up(pos).flatMap(move::left),
+          move.up(pos).flatMap(move::right),
+          move.down(pos).flatMap(move::right),
+          move.down(pos).flatMap(move::left)
         ).collect(Collectors.toList());
-        if (grid.validPos(x, y - 1).filter(p -> grid.valueAt(p).orElse(' ') == WATER).isPresent()) {
-          ifNeighbors.add(grid.validPos(x, y + 1));
+        if (move.up(pos).filter(p -> grid.valueAt(p).orElse(' ') == WATER).isPresent()) {
+          ifNeighbors.add(move.down(pos));
         }
-        if (grid.validPos(x, y + 1).filter(p -> grid.valueAt(p).orElse(' ') == WATER).isPresent()) {
-          ifNeighbors.add(grid.validPos(x, y - 1));
+        if (move.down(pos).filter(p -> grid.valueAt(p).orElse(' ') == WATER).isPresent()) {
+          ifNeighbors.add(move.up(pos));
         }
-        if (grid.validPos(x - 1, y).filter(p -> grid.valueAt(p).orElse(' ') == WATER).isPresent()) {
-          ifNeighbors.add(grid.validPos(x + 1, y));
+        if (move.left(pos).filter(p -> grid.valueAt(p).orElse(' ') == WATER).isPresent()) {
+          ifNeighbors.add(move.right(pos));
         }
-        if (grid.validPos(x + 1, y).filter(p -> grid.valueAt(p).orElse(' ') == WATER).isPresent()) {
-          ifNeighbors.add(grid.validPos(x - 1, y));
+        if (move.right(pos).filter(p -> grid.valueAt(p).orElse(' ') == WATER).isPresent()) {
+          ifNeighbors.add(move.left(pos));
         }
         return ifNeighbors.stream().filter(Optional::isPresent).map(Optional::get);
       }
       case SHIP_START_NORTH: {
-        int x = pos.x(), y = pos.y();
         return Stream.of(
-          grid.validPos(x - 1, y - 1),
-          grid.validPos(    x, y - 1),
-          grid.validPos(x + 1, y - 1),
-          grid.validPos(x + 1,     y),
-          grid.validPos(x + 1, y + 1),
-          grid.validPos(x + 1, y + 2),
-          grid.validPos(x - 1, y + 2),
-          grid.validPos(x - 1, y + 1),
-          grid.validPos(x - 1,     y)
-        ).filter(Optional::isPresent).map(Optional::get);
+          move.up(pos).flatMap(move::left),
+          move.up(pos),
+          move.up(pos).flatMap(move::right),
+          move.right(pos),
+          move.down(pos).flatMap(move::right),
+          move.down(pos, 2).flatMap(move::right),
+          move.down(pos, 2).flatMap(move::left),
+          move.down(pos).flatMap(move::left),
+          move.left(pos)
+        ).flatMap(Optional::stream);
       }
       case SHIP_START_WEST: {
-        int x = pos.x(), y = pos.y();
         return Stream.of(
-          grid.validPos(x + 2, y - 1),
-          grid.validPos(x + 1, y - 1),
-          grid.validPos(    x, y - 1),
-          grid.validPos(x - 1, y - 1),
-          grid.validPos(x - 1,     y),
-          grid.validPos(x - 1, y + 1),
-          grid.validPos(    x, y + 1),
-          grid.validPos(x + 1, y + 1),
-          grid.validPos(x + 2, y + 1)
-        ).filter(Optional::isPresent).map(Optional::get);
+          move.right(pos, 2).flatMap(move::up),
+          move.right(pos).flatMap(move::up),
+          move.up(pos),
+          move.up(pos).flatMap(move::left),
+          move.left(pos),
+          move.down(pos).flatMap(move::left),
+          move.right(pos),
+          move.right(pos).flatMap(move::down),
+          move.right(pos, 2).flatMap(move::down)
+        ).flatMap(Optional::stream);
       }
       case SHIP_START_SOUTH: {
-        int x = pos.x(), y = pos.y();
         return Stream.of(
-          grid.validPos(x + 1, y - 2),
-          grid.validPos(x + 1, y - 1),
-          grid.validPos(x + 1,     y),
-          grid.validPos(x + 1, y + 1),
-          grid.validPos(    x, y + 1),
-          grid.validPos(x - 1, y + 1),
-          grid.validPos(x - 1,     y),
-          grid.validPos(x - 1, y - 1),
-          grid.validPos(x - 1, y - 2)
-        ).filter(Optional::isPresent).map(Optional::get);
+          move.up(pos, 2).flatMap(move::right),
+          move.up(pos).flatMap(move::right),
+          move.right(pos),
+          move.down(pos).flatMap(move::right),
+          move.down(pos),
+          move.down(pos).flatMap(move::left),
+          move.left(pos),
+          move.up(pos).flatMap(move::left),
+          move.up(pos, 2).flatMap(move::left)
+        ).flatMap(Optional::stream);
       }
       case SHIP_START_EAST: {
-        int x = pos.x(), y = pos.y();
         return Stream.of(
-          grid.validPos(x - 2, y - 1),
-          grid.validPos(x - 1, y - 1),
-          grid.validPos(    x, y - 1),
-          grid.validPos(x + 1, y - 1),
-          grid.validPos(x + 1,     y),
-          grid.validPos(x + 1, y + 1),
-          grid.validPos(    x, y + 1),
-          grid.validPos(x - 1, y + 1),
-          grid.validPos(x - 2, y + 1)
-        ).filter(Optional::isPresent).map(Optional::get);
+          move.left(pos, 2).flatMap(move::up),
+          move.left(pos).flatMap(move::up),
+          move.up(pos),
+          move.left(pos).flatMap(move::up),
+          move.right(pos),
+          move.right(pos).flatMap(move::down),
+          move.right(pos),
+          move.left(pos).flatMap(move::down),
+          move.left(pos, 2).flatMap(move::down)
+        ).flatMap(Optional::stream);
       }
     }
     return Stream.<Pos>of();
   }
 
   private Grid<Character> completeRows(Grid<Character> grid) {
-    Grid.Overlay<Character> gridOverlay = grid.overlay();
+    Grid.Builder<Character> gridOverlay = grid.copy();
     IntStream.range(0, rowCounts.size()).forEach(col -> {
       int count = rowCounts.get(col);
       int water = (int) IntStream.range(0, columnCounts.size()).mapToObj(row -> Pos.at(row, col)).filter(pos -> grid.valueAt(pos).orElse(' ') == WATER).count();
@@ -294,11 +294,11 @@ public class Battleships implements Runnable {
         IntStream.range(0, columnCounts.size()).mapToObj(row -> Pos.at(row, col)).filter(pos -> grid.valueAt(pos).isEmpty()).forEach(pos -> gridOverlay.add(Cell.at(pos).withValue(SOME_SHIP_PART)));
       }
     });
-    return gridOverlay.finish();
+    return gridOverlay.addedCells() ? gridOverlay.build() : grid;
   }
 
   private Grid<Character> completeColumns(Grid<Character> grid) {
-    Grid.Overlay<Character> gridOverlay = grid.overlay();
+    Grid.Builder<Character> gridOverlay = grid.copy();
     IntStream.range(0, columnCounts.size()).forEach(row -> {
       int count = columnCounts.get(row);
       int water = (int) IntStream.range(0, rowCounts.size()).mapToObj(col -> Pos.at(row, col)).filter(pos -> grid.valueAt(pos).orElse(' ') == WATER).count();
@@ -306,25 +306,27 @@ public class Battleships implements Runnable {
         IntStream.range(0, rowCounts.size()).mapToObj(col -> Pos.at(row, col)).filter(pos -> grid.valueAt(pos).isEmpty()).forEach(pos -> gridOverlay.add(Cell.at(pos).withValue(SOME_SHIP_PART)));
       }
     });
-    return gridOverlay.finish();
+    return gridOverlay.addedCells() ? gridOverlay.build() : grid;
   }
 
   private void print(Grid<Character> grid) {
-    StringWriter out = new StringWriter();
+    int rasterSize = (2 * grid.width() + 1) + 1;
 
-    GridPrinter<Character> gridPrinter = new GridPrinter<>(v -> v);
+    CharRaster raster = CharRaster.builder().ofWidth(rasterSize).ofHeight(rasterSize).build();
 
-    gridPrinter.printTo( new PrintWriter(out), grid);
+    GridPrinter<Character> gridPrinter = new GridPrinter<Character>(raster::set, Function.identity());
 
-    String[] lines = out.toString().split("\\n");
+    gridPrinter.print(grid);
 
     for (int row = 0; row < rowCounts.size(); row++) {
-      lines[2 * row + 1] += " " + rowCounts.get(row);
+      raster.set(Pos.at(rasterSize - 1, 2 * row + 1), (char) ('0' + rowCounts.get(row)));
     }
 
-    for(String line : lines) { System.out.println(line); }
+    for (int col = 0; col < columnCounts.size(); col++) {
+      raster.set(Pos.at(2 * col + 1, rasterSize - 1), (char) ('0' + columnCounts.get(col)));
+    }
 
-    System.out.println(columnCounts.stream().map(x -> String.valueOf(x)).collect(joining(" ", " ", "")));
+    raster.lines().forEach(System.out::println);
   }
 
   public static class Solution {
@@ -366,7 +368,7 @@ public class Battleships implements Runnable {
     public boolean countsMatch(List<Integer> rowCounts, List<Integer> columnCounts) {
       for (int y = 0; y < rowCounts.size(); y++) {
         int count = rowCounts.get(y);
-        int actual = (int) grid.filledCells()
+        int actual = (int) grid.cellsMatching(c -> c.value().isPresent())
           .filter(inColumn(y))
           .filter(cell -> !grid.valueAt(cell.pos()).get().equals(WATER))
           .count();
@@ -374,7 +376,7 @@ public class Battleships implements Runnable {
       }
       for (int x = 0; x < columnCounts.size(); x++) {
         int count = columnCounts.get(x);
-        int actual = (int) grid.filledCells()
+        int actual = (int) grid.cellsMatching(c -> c.value().isPresent())
           .filter(inRow(x))
           .filter(cell -> !grid.valueAt(cell.pos()).get().equals(WATER))
           .count();
@@ -447,7 +449,7 @@ public class Battleships implements Runnable {
     }
 
     private Solution placeShipAt(Ship ship, Placement placement) {
-      Grid.Builder<Character> gridBuilder = Grid.builder(Character.class).copyOf(grid);
+      Grid.Builder<Character> gridBuilder = grid.copy();
       switch (ship) {
         case SUBMARINE:
           gridBuilder.add(Cell.at(placement.move(0).get()).withValue(SUBMARINE));
@@ -483,7 +485,7 @@ public class Battleships implements Runnable {
       private Builder(Grid<Character> grid) {
         this.grid = grid;
         gridBuilder = Grid.builder(Character.class).add(Cell.at(grid.width() - 1, grid.height() - 1));
-        grid.filledCells().forEach(cell -> {
+        grid.cellsMatching(c -> c.value().isPresent()).forEach(cell -> {
           Pos pos = cell.pos();
           if (!visited.contains(pos)) {
             gridBuilder.add(cell);

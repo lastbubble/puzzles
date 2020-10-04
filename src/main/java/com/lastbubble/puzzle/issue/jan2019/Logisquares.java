@@ -2,13 +2,14 @@ package com.lastbubble.puzzle.issue.jan2019;
 
 import static com.lastbubble.puzzle.logic.Formula.*;
 
-import com.lastbubble.puzzle.Cell;
-import com.lastbubble.puzzle.Grid;
-import com.lastbubble.puzzle.GridPrinter;
-import com.lastbubble.puzzle.Pos;
+import com.lastbubble.puzzle.common.Cell;
+import com.lastbubble.puzzle.common.CharRaster;
+import com.lastbubble.puzzle.common.Grid;
+import com.lastbubble.puzzle.common.GridPrinter;
+import com.lastbubble.puzzle.common.Mover;
+import com.lastbubble.puzzle.common.Pos;
 import com.lastbubble.puzzle.solver.Solver;
 
-import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -74,6 +75,7 @@ public class Logisquares implements Runnable {
   }
 
   private final Grid<Character> grid;
+  private final Mover move;
   private final BiPredicate<Pos, Pos> sameRegion;
 
   private final Solver<Pos> solver = new Solver<>();
@@ -85,8 +87,8 @@ public class Logisquares implements Runnable {
     Map<Integer, Integer> minesInColumn
   ) {
     this.grid = grid;
-    grid.filledCells().forEach(c -> addConstraintsFor(c));
-
+    move = grid.mover();
+    grid.cellsMatching(c -> c.value().isPresent()).forEach(c -> addConstraintsFor(c));
 
     Map<Pos, Set<Pos>> regionForPos = new HashMap<>();
     for (Set<Pos> region : regions) {
@@ -109,8 +111,7 @@ public class Logisquares implements Runnable {
 
     if (Character.isDigit(value)) {
       solver.addExactly(value - '0',
-        grid.neighborsOf(c.pos()).filter(p -> !grid.valueAt(p).isPresent()).map(solver::varFor)
-      );
+        move.neighborsOf(c.pos()).filter(p -> grid.valueAt(p).isEmpty()).map(solver::varFor));
 
     } else {
       Stream.of(Arrow.values()).filter(a -> a.symbol() == value).forEach(a ->
@@ -141,7 +142,7 @@ public class Logisquares implements Runnable {
 
     while (true) {
 
-      Grid.Builder<Character> gridBuilder = Grid.builder(Character.class).copyOf(grid);
+      Grid.Builder<Character> gridBuilder = grid.copy();
 
       try {
         Set<Pos> solution = solver.solve();
@@ -168,10 +169,11 @@ public class Logisquares implements Runnable {
 
   protected boolean isValid(Grid<Character> grid) { return true; }
 
-  private final GridPrinter<Character> gridPrinter = new GridPrinter<>(c -> c);
-
   protected void print(Grid<Character> grid) {
-    gridPrinter.printTo( new PrintWriter(System.out, true), grid, sameRegion);
+    CharRaster raster = CharRaster.builder().ofWidth(2 * grid.width() + 1).ofHeight(2 * grid.height() + 1).build();
+    GridPrinter<Character> printer = new GridPrinter<Character>(raster::set, c -> c);
+    printer.print(grid, sameRegion);
+    raster.lines().forEach(System.out::println);
   }
 
   public enum Arrow {

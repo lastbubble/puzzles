@@ -21,7 +21,7 @@ import com.lastbubble.puzzle.common.Grid;
 import com.lastbubble.puzzle.common.GridPrinter;
 import com.lastbubble.puzzle.common.Pos;
 
-public class Skyscrapers implements Runnable{
+public class Skyscrapers implements Runnable {
 
   public static Skyscrapers load(Iterable<String> lines) {
     EnumMap<Direction, List<Optional<Integer>>> directionCounts = new EnumMap<>(Direction.class);
@@ -97,7 +97,7 @@ public class Skyscrapers implements Runnable{
   }
 
   protected void display(Solution solution) {
-    solution.toRaster().lines().forEach(line -> System.out.println(line));
+    solution.toRaster().lines().forEach(System.out::println);
   }
 
   public enum Direction {
